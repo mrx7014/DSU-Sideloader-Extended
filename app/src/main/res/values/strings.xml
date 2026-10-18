@@ -147,6 +147,12 @@
     <string name="unmount_sd_title">Unmount SD</string>
     <string name="unmount_sd_description">Temporary unmount sd when installing</string>
 
+    <string name="shared_folder_title">Shared Folder</string>
+    <string name="shared_folder_select_description">Choose a folder to expose to the DSU guest (root only)</string>
+    <string name="shared_folder_enabled_description">Mounted in DSU: %1$s</string>
+    <string name="shared_folder_choose">Choose shared folder</string>
+    <string name="shared_folder_choose_description">The same internal-storage folder will be bind-mounted in DSU. Device and GSI support is required.</string>
+
     <string name="warning_storage_check_title">Warning</string>
     <string name="warning_storage_check_description">DSU installation will allocate some free space on your device, disabling storage checks may let into errors.\nThis option is not recommended. Only continue if you know what you\'re doing!</string>
 

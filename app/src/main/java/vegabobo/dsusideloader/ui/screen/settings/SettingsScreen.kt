@@ -1,5 +1,8 @@
 package vegabobo.dsusideloader.ui.screen.settings
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -8,8 +11,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import vegabobo.dsusideloader.R
+import vegabobo.dsusideloader.core.SharedFolderManager
 import vegabobo.dsusideloader.preferences.AppPrefs
 import vegabobo.dsusideloader.ui.components.ApplicationScreen
 import vegabobo.dsusideloader.ui.components.DialogLikeBottomSheet
@@ -27,6 +32,20 @@ fun Settings(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val sharedFolderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+            SharedFolderManager.getPrimaryStorageRelativePath(context, uri)?.let {
+                settingsViewModel.onSharedFolderSelected(it)
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         settingsViewModel.checkDevOpt()
@@ -68,6 +87,24 @@ fun Settings(
             showToggle = true,
             isChecked = uiState.preferences[AppPrefs.UMOUNT_SD]!!,
             onClick = { settingsViewModel.togglePreference(AppPrefs.UMOUNT_SD, !it) },
+        )
+        PreferenceItem(
+            title = stringResource(id = R.string.shared_folder_title),
+            description = if (uiState.sharedFolderPath.isEmpty()) {
+                stringResource(id = R.string.shared_folder_select_description)
+            } else {
+                stringResource(id = R.string.shared_folder_enabled_description, uiState.sharedFolderPath)
+            },
+            showToggle = true,
+            isEnabled = uiState.isRoot && uiState.sharedFolderPath.isNotEmpty(),
+            isChecked = uiState.preferences[AppPrefs.SHARED_FOLDER_ENABLED] == true,
+            onClick = { settingsViewModel.toggleSharedFolder(it) },
+        )
+        PreferenceItem(
+            title = stringResource(id = R.string.shared_folder_choose),
+            description = stringResource(id = R.string.shared_folder_choose_description),
+            isEnabled = uiState.isRoot,
+            onClick = { sharedFolderPicker.launch(null) },
         )
         PreferenceItem(
             title = stringResource(id = R.string.keep_screen_on),

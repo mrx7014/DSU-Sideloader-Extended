@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import vegabobo.dsusideloader.core.BaseViewModel
+import vegabobo.dsusideloader.core.SharedFolderManager
 import vegabobo.dsusideloader.model.Session
 import vegabobo.dsusideloader.preferences.AppPrefs
 import vegabobo.dsusideloader.util.OperationMode
@@ -42,6 +43,11 @@ class SettingsViewModel @Inject constructor(
         if (session.isRoot()) {
             _uiState.update { it.copy(isRoot = true) }
         }
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(sharedFolderPath = readStringPref(AppPrefs.SHARED_FOLDER_PATH))
+            }
+        }
     }
 
     init {
@@ -59,6 +65,37 @@ class SettingsViewModel @Inject constructor(
                     it.copy(preferences = cloneMap)
                 }
             }
+        }
+    }
+
+    fun onSharedFolderSelected(relativePath: String) {
+        if (!session.isRoot() || !SharedFolderManager.setConfiguredPath(relativePath)) return
+        viewModelScope.launch {
+            updateStringPref(AppPrefs.SHARED_FOLDER_PATH, relativePath)
+            updateBoolPref(AppPrefs.SHARED_FOLDER_ENABLED, true)
+            val preferences = hashMapOf<String, Boolean>()
+            preferences.putAll(uiState.value.preferences)
+            preferences[AppPrefs.SHARED_FOLDER_ENABLED] = true
+            _uiState.update {
+                it.copy(preferences = preferences, sharedFolderPath = relativePath)
+            }
+        }
+    }
+
+    fun toggleSharedFolder(enabled: Boolean) {
+        if (!session.isRoot()) return
+        viewModelScope.launch {
+            if (enabled && uiState.value.sharedFolderPath.isNotEmpty()) {
+                SharedFolderManager.setConfiguredPath(uiState.value.sharedFolderPath)
+            } else if (!enabled) {
+                SharedFolderManager.unmount(uiState.value.sharedFolderPath)
+                SharedFolderManager.clearConfiguredPath()
+            }
+            updateBoolPref(AppPrefs.SHARED_FOLDER_ENABLED, enabled)
+            val preferences = hashMapOf<String, Boolean>()
+            preferences.putAll(uiState.value.preferences)
+            preferences[AppPrefs.SHARED_FOLDER_ENABLED] = enabled
+            _uiState.update { it.copy(preferences = preferences) }
         }
     }
 

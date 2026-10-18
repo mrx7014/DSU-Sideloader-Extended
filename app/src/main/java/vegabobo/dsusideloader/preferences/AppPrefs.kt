@@ -20,4 +20,6 @@ object AppPrefs {
     const val UMOUNT_SD = "umount_sd"
     const val DISABLE_STORAGE_CHECK = "disable_storage_check"
     const val FULL_LOGCAT_LOGGING = "full_logcat_logging"
+    const val SHARED_FOLDER_ENABLED = "shared_folder_enabled"
+    const val SHARED_FOLDER_PATH = "shared_folder_path"
 }

@@ -88,6 +88,12 @@ DSU Sideloader support multiple operation modes, they will define how our app wi
 - Rooted devices via Magisk, should be running Magisk v24 or higher, older versions may break DSU feature.
 - We highly recommend using this app with Stock ROM, some Custom ROM builds may also work fine.
 
+#### Shared Folder (root only)
+
+The Magisk module can expose a folder from the host internal storage inside the DSU guest using a bind mount. Open Settings, choose a folder under primary internal storage, and enable **Shared Folder**. The same folder is mounted at the same path inside DSU when the device and GSI expose Android's DSU pass-through storage mount.
+
+This is experimental and requires root, the Magisk module, and a compatible device/GSI. It is disabled by default. Do not use it for databases or files that are written concurrently by both systems.
+
 ## Common questions
 
 1. DSU installation finishes with no errors, but device doesn't boot into installed DSU, what should i do?
