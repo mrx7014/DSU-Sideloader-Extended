@@ -1,33 +1,152 @@
-name: Android CI
+name: Android CI and Release
 
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag for the release, for example v2.04"
+        required: true
+        type: string
+      version_name:
+        description: "Application and module version name, for example 2.04"
+        required: true
+        type: string
+      version_code:
+        description: "Application and module version code, for example 9"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the GitHub release as a pre-release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-
+  debug:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Check out source
+        uses: actions/checkout@v4
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-      
-    - name: Build with Gradle
-      run: ./gradlew assembleMiniDebug
-      
-    - name: Archive artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: outputs-apk-minidebug
-        path: app/build/outputs/apk/miniDebug
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build MiniDebug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleMiniDebug
+
+      - name: Upload MiniDebug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: outputs-apk-minidebug
+          path: app/build/outputs/apk/miniDebug/*.apk
+
+  release:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      VERSION_NAME: ${{ inputs.version_name }}
+      VERSION_CODE: ${{ inputs.version_code }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set release version
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("build.gradle.kts")
+          text = path.read_text()
+          version_name = os.environ["VERSION_NAME"]
+          version_code = os.environ["VERSION_CODE"]
+          if not re.fullmatch(r"[0-9]+", version_code):
+              raise SystemExit("version_code must contain only digits")
+          if not re.fullmatch(r"[0-9A-Za-z._+-]+", version_name):
+              raise SystemExit("version_name contains unsupported characters")
+          text = re.sub(
+              r'val versionCode by extra \{ \d+ \}',
+              f'val versionCode by extra {{ {version_code} }}',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'val versionName by extra \{ "[^"]+" \}',
+              f'val versionName by extra {{ "{version_name}" }}',
+              text,
+              count=1,
+          )
+          path.write_text(text)
+          PY
+          chmod +x gradlew
+          git diff -- build.gradle.kts
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      - name: Build Magisk module
+        run: ./gradlew assembleMagiskModule
+
+      - name: Locate release files
+        id: files
+        run: |
+          apk="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          module="$(find magisk-module/out -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          test -n "$apk" || { echo "Release APK was not produced" >&2; exit 1; }
+          test -n "$module" || { echo "Magisk module was not produced" >&2; exit 1; }
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+          echo "module=$module" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.version_name }}
+          path: |
+            ${{ steps.files.outputs.apk }}
+            ${{ steps.files.outputs.module }}
+
+      - name: Create GitHub Release
+        run: |
+          args=(
+            "$RELEASE_TAG"
+            "${{ steps.files.outputs.apk }}"
+            "${{ steps.files.outputs.module }}"
+            --repo "$GITHUB_REPOSITORY"
+            --target "$GITHUB_SHA"
+            --title "DSU Sideloader $VERSION_NAME"
+            --generate-notes
+          )
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"
