@@ -15,9 +15,14 @@ tasks.register<Zip>("assembleMagiskModule") {
     val moduleDirectory = "$workDirectory/src/main/resources/module"
     val outDirectory = "$workDirectory/out"
 
-    val releaseApk = File("${System.getProperty("user.dir")}/app/build/outputs/apk/release/app-release.apk")
+    val releaseDirectory = File("${System.getProperty("user.dir")}/app/build/outputs/apk/release")
+    // GitHub builds do not have the private release keystore, so AGP may
+    // produce app-release-unsigned.apk instead of app-release.apk.
+    val releaseApk = releaseDirectory.listFiles()
+        ?.firstOrNull { it.isFile && it.name.startsWith("app-release") && it.extension == "apk" }
 
-    if (!releaseApk.exists()) {
+    if (releaseApk == null) {
+        println("Release APK not found in $releaseDirectory; skipping Magisk module")
         return@register
     }
 
